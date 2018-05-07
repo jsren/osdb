@@ -40,7 +40,7 @@ namespace osdb
         bplus_leaf* leftLeaf;
         bplus_leaf* rightLeaf;
 
-        std::array<std::pair<Key, Value>, Order> items{};
+        std::array<std::pair<Key, Value>, LeafSize> items{};
         size_t count{};
 
         bplus_leaf(node_type* parent, bplus_leaf* left, bplus_leaf* right)
@@ -50,7 +50,9 @@ namespace osdb
         {
             items[count++] = std::pair<Key, Value>(
                 std::move(key), std::move(value));
-            std::sort(std::begin(items), std::end(items));
+
+            std::sort(std::begin(items),
+                count != LeafSize ? (std::begin(items) + count) : std::end(items));
             return 0;
         }
     };
@@ -90,7 +92,7 @@ namespace osdb
         {
             size_t i = 0;
             for (; i < Order; i++) {
-                if (nodes[i].node == nullptr || key < keys[i]) break;
+                if (nodes[i+1].node == nullptr || key < keys[i]) break;
             }
 
             if (hasLeaves)
@@ -100,16 +102,13 @@ namespace osdb
                     nodes[i].leaf = new leaf_type(this, nullptr, nullptr);
                     first = nodes[i].leaf;
                     last = nodes[i].leaf;
-                    if (i < Order) keys[i] = key;
                 }
                 return nodes[i].leaf->add(std::move(key), std::move(value));
             }
             else
             {
-                if (nodes[i].node == nullptr)
-                {
+                if (nodes[i].node == nullptr) {
                     nodes[i].node = new bplus_node(this, true, nullptr, nullptr);
-                    if (i < Order) keys[i] = key;
                 }
                 return nodes[i].node->add(std::move(key), std::move(value), first, last);
             }
@@ -237,27 +236,15 @@ namespace osdb
             _size++;
         }
 
-        const leaf_type* find_leaf(const key_type& value, bool inclusive) const
+        auto scan_items() const
         {
-            const node_type* node = &root;
-            while (true)
-            {
-                size_t i = 0;
-                for (; i < Order; i++)
-                {
-                    if (value < node->keys[i]) continue;
-                    else if (!inclusive && (node->keys[i] == value)) continue;
-                    else break;
-                }
-                if (node->hasLeaves) return node->nodes[i].leaf;
-                else node = node->nodes[i].node;
-            }
-            return nullptr;
+            return leaf_iterable<const leaf_type>(
+                firstLeaf, 0, nullptr, 0);
         }
-
 
         struct range_start { };
         struct range_end { };
+
 
         template<typename T, typename Y>
         auto search_range(const T& start, const Y& end,
@@ -306,6 +293,25 @@ namespace osdb
             }
             return leaf_iterable<const leaf_type>(firstLeaf,
                 firstIndex, lastLeaf, lastIndex);
+        }
+
+    private:
+        const leaf_type* find_leaf(const key_type& value, bool inclusive) const
+        {
+            const node_type* node = &root;
+            while (true)
+            {
+                size_t i = 0;
+                for (; i < Order; i++)
+                {
+                    if (value < node->keys[i]) continue;
+                    else if (!inclusive && (node->keys[i] == value)) continue;
+                    else break;
+                }
+                if (node->hasLeaves) return node->nodes[i].leaf;
+                else node = node->nodes[i].node;
+            }
+            return nullptr;
         }
     };
 }

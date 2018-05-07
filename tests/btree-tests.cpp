@@ -22,9 +22,15 @@ TEST(BtreeSuite, EmptyTest)
     EXPECT_EQ(tree.leaf_size(), leafSize);
     EXPECT_EQ(tree.height(), 0);
     EXPECT_EQ(tree.size(), 0);
+
+    for (auto& pair : tree.scan_items())
+    {
+        (void)pair;
+        ASSERT(false);
+    }
 }
 
-TEST(BtreeSuite, AddTest)
+TEST(BtreeSuite, AddOne)
 {
     constexpr const size_t order = 4;
     constexpr const size_t leafSize = 8;
@@ -36,6 +42,21 @@ TEST(BtreeSuite, AddTest)
     EXPECT_EQ(tree.leaf_size(), leafSize);
     EXPECT_EQ(tree.height(), 0);
     EXPECT_EQ(tree.size(), 1);
+}
+
+TEST(BtreeSuite, SearchEmpty)
+{
+    constexpr const size_t order = 4;
+    constexpr const size_t leafSize = 8;
+    constexpr const T1 key{0x5AD};
+
+    osdb::bplus_tree<T1, T2, order, leafSize> tree{};
+
+    for (auto& pair : tree.search_range(T1{}, T1{}))
+    {
+        (void)pair;
+        ASSERT(false);
+    }
 }
 
 TEST(BtreeSuite, SearchOne)
@@ -51,10 +72,10 @@ TEST(BtreeSuite, SearchOne)
     size_t count = 0;
     for (auto& pair : tree.search_range(key, key))
     {
+        ASSERT_LT(count, 1);
+        ++count;
         EXPECT_EQ(pair.first, key);
         EXPECT_EQ(pair.second, value);
-        ++count;
-        ASSERT_LTEQ(count, 1);
     }
     EXPECT_EQ(count, 1);
 }
@@ -77,12 +98,12 @@ TEST(BtreeSuite, SearchTwo)
     size_t count = 0;
     for (auto& pair : tree.search_range(key1, key2))
     {
+        ASSERT_LT(count, 2);
         EXPECT(pair.first == keys[count]);
         EXPECT_EQ(pair.second, value);
         ++count;
-        ASSERT_LTEQ(count, 1);
     }
-    EXPECT_EQ(count, 1);
+    EXPECT_EQ(count, 2);
 }
 
 TEST(BtreeSuite, SearchSame)
@@ -99,10 +120,38 @@ TEST(BtreeSuite, SearchSame)
     size_t count = 0;
     for (auto& pair : tree.search_range(key, key))
     {
+        ASSERT_LT(count, 2);
+        ++count;
         EXPECT_EQ(pair.first, key);
         EXPECT_EQ(pair.second, value);
-        ++count;
-        ASSERT_LTEQ(count, 2);
     }
     EXPECT_EQ(count, 2);
+}
+
+TEST(BtreeSuite, FillLeafSameScan)
+{
+    constexpr const size_t order = 4;
+    constexpr const size_t leafSize = 8;
+
+    constexpr const T1 key{0x5AD};
+    constexpr const T2 value{true};
+
+    osdb::bplus_tree<T1, T2, order, leafSize> tree{};
+    for (size_t i = 0; i < leafSize; i++) {
+        tree.add(key, value);
+    }
+    EXPECT_EQ(tree.order(), order);
+    EXPECT_EQ(tree.leaf_size(), leafSize);
+    EXPECT_EQ(tree.height(), 0);
+    EXPECT_EQ(tree.size(), leafSize);
+
+    size_t count = 0;
+    for (auto& pair : tree.scan_items())
+    {
+        ASSERT_LT(count, leafSize);
+        ++count;
+        EXPECT_EQ(pair.first, key);
+        EXPECT_EQ(pair.second, value);
+    }
+    EXPECT_EQ(count, leafSize);
 }
